@@ -2,7 +2,7 @@ pub(crate) mod lexer {
     use crate::lexer::lexer::Arith::{Add, Div, Mod, Mul, Sub};
     use crate::lexer::lexer::Log::{And, Not, Or};
     use crate::lexer::lexer::Token::{Colon, Comma, End, LogOp, NumOp};
-    use crate::Token::{Lambda, Literal, LParen, RParen};
+    use crate::Token::{Lambda, LParen, Number, RParen, Variable};
 
     #[derive(Debug, Eq, PartialEq)]
     pub enum Arith {
@@ -29,7 +29,8 @@ pub(crate) mod lexer {
         Comma,
         LParen,
         RParen,
-        Literal(String),
+        Number(String),
+        Variable(String),
         NumOp(Arith),
         LogOp(Log),
     }
@@ -146,10 +147,14 @@ pub(crate) mod lexer {
                 self.next_char();
             }
 
-            if cur_tok == "lambda" {
-                self.cur_token = Lambda;
+            if is_var {
+                if cur_tok == "lambda" {
+                    self.cur_token = Lambda;
+                } else {
+                    self.cur_token = Variable(cur_tok);
+                }
             } else {
-                self.cur_token = Literal(cur_tok);
+                self.cur_token = Number(cur_tok);
             }
         }
 
