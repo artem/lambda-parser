@@ -1,8 +1,8 @@
 pub(crate) mod lexer {
     use crate::lexer::lexer::Arith::{Add, Div, Mod, Mul, Sub};
-    use crate::lexer::lexer::Log::{And, Or};
+    use crate::lexer::lexer::Log::{And, Not, Or};
     use crate::lexer::lexer::Token::{Colon, Comma, End, LogOp, NumOp};
-    use crate::Token::{Lambda, Number, Variable};
+    use crate::Token::{Lambda, Literal, LParen, RParen};
 
     #[derive(Debug, Eq, PartialEq)]
     pub enum Arith {
@@ -27,8 +27,9 @@ pub(crate) mod lexer {
         Lambda,
         Colon,
         Comma,
-        Number(String),
-        Variable(String),
+        LParen,
+        RParen,
+        Literal(String),
         NumOp(Arith),
         LogOp(Log),
     }
@@ -56,7 +57,11 @@ pub(crate) mod lexer {
         }
 
         fn is_separator(c: u8) -> bool {
-            let seps = ['\0', '*', '/', '+', '-', '%', ',', ':'];
+            let seps = ['\0',
+                '*', '/', '+', '-', '%',
+                ',', ':',
+                '=', '!', '|', '&',
+                '(', ')'];
             return Lexer::is_blank(c) || seps.contains(&(c as char));
         }
 
@@ -100,6 +105,8 @@ pub(crate) mod lexer {
                     '\0' => End,
                     ',' => Comma,
                     ':' => Colon,
+                    '(' => LParen,
+                    ')' => RParen,
                     '&' => {
                         self.expect_str("&");
                         LogOp(And)
@@ -108,6 +115,11 @@ pub(crate) mod lexer {
                         self.expect_str("|");
                         LogOp(Or)
                     }
+                    '=' => {
+                        self.expect_str("=");
+                        LogOp(Log::Eq)
+                    }
+                    '!' => LogOp(Not),
                     '*' => NumOp(Mul),
                     '/' => NumOp(Div),
                     '+' => NumOp(Add),
@@ -134,14 +146,10 @@ pub(crate) mod lexer {
                 self.next_char();
             }
 
-            if is_var {
-                if cur_tok == "lambda" {
-                    self.cur_token = Lambda;
-                } else {
-                    self.cur_token = Variable(cur_tok);
-                }
+            if cur_tok == "lambda" {
+                self.cur_token = Lambda;
             } else {
-                self.cur_token = Number(cur_tok);
+                self.cur_token = Literal(cur_tok);
             }
         }
 
