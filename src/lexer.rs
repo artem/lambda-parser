@@ -1,10 +1,11 @@
-mod lexer {
-    use std::path::is_separator;
+pub(crate) mod lexer {
     use crate::lexer::lexer::Arith::{Add, Div, Mod, Mul, Sub};
     use crate::lexer::lexer::Log::{And, Or};
-    use crate::lexer::lexer::Token::{Colon, Comma, End, LogOp};
+    use crate::lexer::lexer::Token::{Colon, Comma, End, LogOp, NumOp};
+    use crate::Token::{Lambda, Number, Variable};
 
-    enum Arith {
+    #[derive(Debug, Eq, PartialEq)]
+    pub enum Arith {
         Mod,
         Add,
         Sub,
@@ -12,24 +13,27 @@ mod lexer {
         Div,
     }
 
-    enum Log {
+    #[derive(Debug, Eq, PartialEq)]
+    pub enum Log {
         And,
         Or,
         Eq,
+        Not,
     }
 
-    enum Token {
+    #[derive(Debug, Eq, PartialEq)]
+    pub enum Token {
         End,
         Lambda,
         Colon,
         Comma,
-        Number,
+        Number(String),
         Variable(String),
-        IntOp(Arith),
+        NumOp(Arith),
         LogOp(Log),
     }
 
-    struct Lexer {
+    pub struct Lexer {
         cur_char: u8,
         cur_pos: usize,
         cur_token: Token,
@@ -37,8 +41,8 @@ mod lexer {
     }
 
     impl Lexer {
-        fn get(str: String) -> Lexer {
-            let mut x = Lexer { cur_char: 0, cur_pos: 0, cur_token: Token::NONE, str };
+        pub fn get(str: String) -> Lexer {
+            let mut x = Lexer { cur_char: 0, cur_pos: 0, cur_token: Token::End, str };
             x.next_char();
             return x;
         }
@@ -52,54 +56,97 @@ mod lexer {
         }
 
         fn is_separator(c: u8) -> bool {
-            let seps = ['*', '/', '+', '-', '%', ',', ':'];
+            let seps = ['\0', '*', '/', '+', '-', '%', ',', ':'];
             return Lexer::is_blank(c) || seps.contains(&(c as char));
         }
 
-        fn is_var_first(c: u8) -> bool {
-            return !Lexer::is_separator(c) && !Lexer::is_digit(c);
+        fn is_letter(c: u8) -> bool {
+            return (c >= 'a' as u8 && c <= 'z' as u8) || (c >= 'A' as u8 && c <= 'Z' as u8);
+        }
+
+        pub fn has_more_symbols(&self) -> bool {
+            return self.cur_pos < self.str.len();
         }
 
         fn next_char(&mut self) {
-            assert!(self.cur_pos < self.str.len());
+            if !self.has_more_symbols() {
+                self.cur_char = 0;
+                return;
+            }
             self.cur_char = self.str.as_bytes()[self.cur_pos];
             self.cur_pos = self.cur_pos + 1;
         }
 
-        fn next_token(&mut self) {
+        fn expect_str(&mut self, x: &str) {
+            let mut i = 0;
+
+            let s = x.as_bytes();
+            while i < s.len() {
+                self.next_char();
+                assert_eq!(s[i], self.cur_char);
+                i = i + 1;
+            }
+        }
+
+        pub fn next_token(&mut self) {
             while Lexer::is_blank(self.cur_char) {
-                Lexer::next_char(self);
+                self.next_char();
             }
 
             let cur_char = self.cur_char;
 
-            if self.cur_pos >= self.str.len() {
-                self.cur_token = End;
-                return;
-            }
-
             if Lexer::is_separator(cur_char) {
                 self.cur_token = match cur_char as char {
+                    '\0' => End,
                     ',' => Comma,
                     ':' => Colon,
                     '&' => {
-                        expect_str("&");
+                        self.expect_str("&");
                         LogOp(And)
                     }
                     '|' => {
-                        expect_str("|");
+                        self.expect_str("|");
                         LogOp(Or)
                     }
-                    '*' => Arith(Mul),
-                    '/' => Arith(Div),
-                    '+' => Arith(Add),
-                    '-' => Arith(Sub),
-                    '%' => Arith(Mod),
+                    '*' => NumOp(Mul),
+                    '/' => NumOp(Div),
+                    '+' => NumOp(Add),
+                    '-' => NumOp(Sub),
+                    '%' => NumOp(Mod),
                     _ => panic!("Unknown separator")
                 };
-                Lexer::next_char(self);
+                self.next_char();
                 return;
             }
+
+            let mut is_var = false;
+            if Lexer::is_letter(self.cur_char) {
+                is_var = true;
+            } else if Lexer::is_digit(self.cur_char) {
+                is_var = false;
+            } else {
+                panic!("Unexpected character '{}' at pos {}", self.cur_char as char, self.cur_pos);
+            }
+            let mut cur_tok = "".to_string();
+
+            while !Lexer::is_separator(self.cur_char) {
+                cur_tok = cur_tok + (self.cur_char as char).to_string().as_str();
+                self.next_char();
+            }
+
+            if is_var {
+                if cur_tok == "lambda" {
+                    self.cur_token = Lambda;
+                } else {
+                    self.cur_token = Variable(cur_tok);
+                }
+            } else {
+                self.cur_token = Number(cur_tok);
+            }
+        }
+
+        pub fn get_token(&self) -> &Token {
+            return &self.cur_token;
         }
     }
 }
