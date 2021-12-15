@@ -1,27 +1,32 @@
 pub(crate) mod lexer {
-    use crate::lexer::lexer::Arith::{Add, Div, Mod, Mul, Sub};
-    use crate::lexer::lexer::Log::{And, Not, Or};
-    use crate::lexer::lexer::Token::{Colon, Comma, End, LogOp, NumOp};
-    use crate::Token::{Lambda, LParen, Number, RParen, Variable};
+    use std::collections::HashMap;
+    use crate::lexer::lexer::Operations::{Add, And, Div, Mod, Mul, Not, Or, Sub};
+    use crate::lexer::lexer::Constant::{False, Number, True};
+    use crate::lexer::lexer::Token::{Colon, Comma, End, Op};
+    use crate::Token::{Const, Lambda, LParen, RParen, Variable};
 
-    #[derive(Debug, Eq, PartialEq)]
-    pub enum Arith {
+    #[derive(Debug, Eq, PartialEq, Copy, Clone)]
+    pub enum Operations {
         Mod,
         Add,
         Sub,
         Mul,
         Div,
-    }
 
-    #[derive(Debug, Eq, PartialEq)]
-    pub enum Log {
         And,
         Or,
         Eq,
         Not,
     }
 
-    #[derive(Debug, Eq, PartialEq)]
+    #[derive(Debug, Eq, PartialEq, Clone)]
+    pub enum Constant {
+        True,
+        False,
+        Number(String),
+    }
+
+    #[derive(Debug, Eq, PartialEq, Clone)]
     pub enum Token {
         End,
         Lambda,
@@ -29,10 +34,9 @@ pub(crate) mod lexer {
         Comma,
         LParen,
         RParen,
-        Number(String),
         Variable(String),
-        NumOp(Arith),
-        LogOp(Log),
+        Op(Operations),
+        Const(Constant)
     }
 
     pub struct Lexer {
@@ -61,7 +65,7 @@ pub(crate) mod lexer {
             let seps = ['\0',
                 '*', '/', '+', '-', '%',
                 ',', ':',
-                '=', '!', '|', '&',
+                '=', '|', '&',
                 '(', ')'];
             return Lexer::is_blank(c) || seps.contains(&(c as char));
         }
@@ -110,33 +114,32 @@ pub(crate) mod lexer {
                     ')' => RParen,
                     '&' => {
                         self.expect_str("&");
-                        LogOp(And)
+                        Op(And)
                     }
                     '|' => {
                         self.expect_str("|");
-                        LogOp(Or)
+                        Op(Or)
                     }
                     '=' => {
                         self.expect_str("=");
-                        LogOp(Log::Eq)
+                        Op(Operations::Eq)
                     }
-                    '!' => LogOp(Not),
-                    '*' => NumOp(Mul),
-                    '/' => NumOp(Div),
-                    '+' => NumOp(Add),
-                    '-' => NumOp(Sub),
-                    '%' => NumOp(Mod),
+                    '*' => Op(Mul),
+                    '/' => Op(Div),
+                    '+' => Op(Add),
+                    '-' => Op(Sub),
+                    '%' => Op(Mod),
                     _ => panic!("Unknown separator")
                 };
                 self.next_char();
                 return;
             }
 
-            let mut is_var = false;
+            let mut is_literal = false;
             if Lexer::is_letter(self.cur_char) {
-                is_var = true;
+                is_literal = true;
             } else if Lexer::is_digit(self.cur_char) {
-                is_var = false;
+                is_literal = false;
             } else {
                 panic!("Unexpected character '{}' at pos {}", self.cur_char as char, self.cur_pos);
             }
@@ -147,14 +150,19 @@ pub(crate) mod lexer {
                 self.next_char();
             }
 
-            if is_var {
-                if cur_tok == "lambda" {
-                    self.cur_token = Lambda;
-                } else {
-                    self.cur_token = Variable(cur_tok);
-                }
+            if is_literal {
+                let keywords = HashMap::from([
+                    ("lambda", Lambda),
+                    ("not", Op(Not)),
+                    ("True", Const(True)),
+                    ("False", Const(False))
+                ]);
+                self.cur_token = match keywords.get(cur_tok.as_str()) {
+                    None => Variable(cur_tok),
+                    Some(tok) => tok.clone()
+                };
             } else {
-                self.cur_token = Number(cur_tok);
+                self.cur_token = Const(Number(cur_tok));
             }
         }
 
