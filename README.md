@@ -106,3 +106,11 @@ Let's first construct `FIRST` and `FOLLOW` sets for our grammar:
 | T'           | *, //, %, ε                                      | or, and, ==, +, -, ), EOL           |
 | F            | \String, +, -, \Num, True, False, (              | or, and, ==, +, -, *, //, %, ), EOL |
 | C            | \String, \Num, True, False, (                    | or, and, ==, +, -, *, //, %, ), EOL |
+
+[Full source code for parser](src/parser.rs)
+
+## Visualization
+it literally prints GraphViz plot lmao.
+
+## Tests
+TBD.
