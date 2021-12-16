@@ -50,6 +50,7 @@ pub(crate) mod lexer {
         pub fn get(str: String) -> Lexer {
             let mut x = Lexer { cur_char: 0, cur_pos: 0, cur_token: Token::End, str };
             x.next_char();
+            x.next_token();
             return x;
         }
 
@@ -65,7 +66,7 @@ pub(crate) mod lexer {
             let seps = ['\0',
                 '*', '/', '+', '-', '%',
                 ',', ':',
-                '=', '|', '&',
+                '=',
                 '(', ')'];
             return Lexer::is_blank(c) || seps.contains(&(c as char));
         }
@@ -112,20 +113,15 @@ pub(crate) mod lexer {
                     ':' => Colon,
                     '(' => LParen,
                     ')' => RParen,
-                    '&' => {
-                        self.expect_str("&");
-                        Op(And)
-                    }
-                    '|' => {
-                        self.expect_str("|");
-                        Op(Or)
-                    }
                     '=' => {
                         self.expect_str("=");
                         Op(Operations::Eq)
                     }
                     '*' => Op(Mul),
-                    '/' => Op(Div),
+                    '/' => {
+                        self.expect_str("/");
+                        Op(Div)
+                    }
                     '+' => Op(Add),
                     '-' => Op(Sub),
                     '%' => Op(Mod),
@@ -154,6 +150,8 @@ pub(crate) mod lexer {
                 let keywords = HashMap::from([
                     ("lambda", Lambda),
                     ("not", Op(Not)),
+                    ("and", Op(And)),
+                    ("or", Op(Or)),
                     ("True", Const(True)),
                     ("False", Const(False))
                 ]);
@@ -166,8 +164,8 @@ pub(crate) mod lexer {
             }
         }
 
-        pub fn get_token(&self) -> &Token {
-            return &self.cur_token;
+        pub fn get_token(&self) -> Token {
+            return self.cur_token.clone();
         }
     }
 }
