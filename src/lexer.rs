@@ -1,7 +1,8 @@
 pub(crate) mod lexer {
     use std::collections::HashMap;
-    use crate::lexer::lexer::Operations::{Add, And, Div, Mod, Mul, Not, Or, Sub};
+
     use crate::lexer::lexer::Constant::{False, Number, True};
+    use crate::lexer::lexer::Operations::{Add, And, Div, Mod, Mul, Not, Or, Sub};
     use crate::lexer::lexer::Token::{Colon, Comma, End, Op};
     use crate::Token::{Const, Lambda, LParen, RParen, Variable};
 
@@ -36,7 +37,7 @@ pub(crate) mod lexer {
         RParen,
         Variable(String),
         Op(Operations),
-        Const(Constant)
+        Const(Constant),
     }
 
     pub struct Lexer {

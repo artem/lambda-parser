@@ -1,54 +1,57 @@
 pub(crate) mod parser {
+    use petgraph::Graph;
+    use petgraph::graph::NodeIndex;
+
     use crate::{Lexer, Token};
-    use crate::lexer::lexer::Constant::{Number, True, False};
+    use crate::lexer::lexer::Constant::{False, Number, True};
     use crate::lexer::lexer::Operations::{Add, And, Div, Eq, Mod, Mul, Not, Or, Sub};
 
     #[derive(Debug, Eq, PartialEq, Clone)]
     pub struct Tree {
-        node: String,
-        // TODO: unneeded?
-        children: Vec<Tree>,
-        id: i32,
+        
     }
 
     impl Tree {
-        pub fn get_leaf(id: i32, tok: String) -> Tree {
-            return Tree { node: tok, children: vec![], id };
+        pub fn get_leaf(graph: &mut Graph<String, &str>, tok: String) -> NodeIndex {
+            return graph.add_node(tok);
         }
     }
 
-    pub struct Parser {
+    pub struct Parser<'a> {
         pub(crate) lex: Lexer,
-        id: i32, // TODO: unneeded?
+        pub(crate) graph: Graph<String, &'a str>,
     }
 
-    impl Parser {
-        pub fn get(str: String) -> Parser {
-            return Parser{ lex: Lexer::get(str), id: 0 }
+    impl Parser<'_> {
+        pub fn get(str: String) -> Parser<'static> {
+            return Parser { lex: Lexer::get(str), graph: Graph::new() };
+        }
+        
+        fn add_eps_node(&mut self, p: NodeIndex) {
+            let xxx = Tree::get_leaf(&mut self.graph, "ε".to_string());
+            self.graph.add_edge(p, xxx, "");
         }
 
-        fn gid(&mut self) -> i32 {
-            let i = self.id;
-            self.id = i + 1;
-            return i;
-        }
-
-        pub fn S(&mut self) -> Tree {
-            let mut node = Tree::get_leaf(self.gid(), "S".to_string());
+        pub fn S(&mut self) -> NodeIndex {
+            let node = Tree::get_leaf(&mut self.graph, "S".to_string());
 
             match self.lex.get_token() {
                 Token::Lambda => {
                     // lambda
                     self.lex.next_token();
-                    node.children.push(Tree::get_leaf(self.gid(), "lambda".to_string()));
+                    let xxx = Tree::get_leaf(&mut self.graph, "lambda".to_string());
+                    self.graph.add_edge(node, xxx, "");
                     // V
-                    node.children.push(self.V());
+                    let xxx = self.V();
+                    self.graph.add_edge(node, xxx, "");
                     // :
                     assert_eq!(self.lex.get_token(), Token::Colon);
                     self.lex.next_token();
-                    node.children.push(Tree::get_leaf(self.gid(), ":".to_string()));
+                    let xxx = Tree::get_leaf(&mut self.graph, ":".to_string());
+                    self.graph.add_edge(node, xxx, "");
                     // S'
-                    node.children.push(self.Sp());
+                    let xxx = self.Sp();
+                    self.graph.add_edge(node, xxx, "");
                 }
                 tok => panic!("Unexpected token {:?}", tok)
             }
@@ -56,64 +59,72 @@ pub(crate) mod parser {
             return node;
         }
 
-        pub fn V(&mut self) -> Tree {
-            let mut node = Tree::get_leaf(self.gid(), "V".to_string());
+        pub fn V(&mut self) -> NodeIndex {
+            let node = Tree::get_leaf(&mut self.graph, "V".to_string());
 
             match self.lex.get_token() {
                 Token::Variable(str) => {
                     // var
                     self.lex.next_token();
-                    node.children.push(Tree::get_leaf(self.gid(), str));
+                    let xxx = Tree::get_leaf(&mut self.graph, str);
+                    self.graph.add_edge(node, xxx, "");
                     // V'
-                    node.children.push(self.Vp());
+                    let xxx = self.Vp();
+                    self.graph.add_edge(node, xxx, "");
                 }
-                Token::Colon => {}
+                Token::Colon => {self.add_eps_node(node)}
                 tok => panic!("Unexpected token {:?}", tok)
             }
 
             return node;
         }
 
-        pub fn Vp(&mut self) -> Tree {
-            let mut node = Tree::get_leaf(self.gid(), "V'".to_string());
+        pub fn Vp(&mut self) -> NodeIndex {
+            let node = Tree::get_leaf(&mut self.graph, "V'".to_string());
 
             match self.lex.get_token() {
                 Token::Comma => {
                     // var
                     self.lex.next_token();
-                    node.children.push(Tree::get_leaf(self.gid(), ",".to_string()));
+                    let xxx = Tree::get_leaf(&mut self.graph, ",".to_string());
+                    self.graph.add_edge(node, xxx, "");
                     // V'
-                    node.children.push(self.V());
+                    let xxx = self.V();
+                    self.graph.add_edge(node, xxx, "");
                 }
-                Token::Colon => {}
+                Token::Colon => {self.add_eps_node(node)}
                 tok => panic!("Unexpected token {:?}", tok)
             }
 
             return node;
         }
 
-        pub fn Sp(&mut self) -> Tree {
-            let mut node = Tree::get_leaf(self.gid(), "S'".to_string());
+        pub fn Sp(&mut self) -> NodeIndex {
+            let node = Tree::get_leaf(&mut self.graph, "S'".to_string());
 
             match self.lex.get_token() {
                 Token::Lambda => {
                     // S
-                    node.children.push(self.S());
+                    let xxx = self.S();
+                    self.graph.add_edge(node, xxx, "");
                 }
                 Token::Variable(_)
                 | Token::Op(Not)
                 | Token::Op(Add)
                 | Token::Op(Sub)
                 | Token::Const(_)
-                | Token::LParen => { node.children.push(self.E()); }
+                | Token::LParen => {
+                    let xxx = self.E();
+                    self.graph.add_edge(node, xxx, "");
+                }
                 tok => panic!("Unexpected token {:?}", tok)
             }
 
             return node;
         }
 
-        pub fn E(&mut self) -> Tree {
-            let mut node = Tree::get_leaf(self.gid(), "E".to_string());
+        pub fn E(&mut self) -> NodeIndex {
+            let node = Tree::get_leaf(&mut self.graph, "E".to_string());
 
             match self.lex.get_token() {
                 Token::Variable(_)
@@ -123,9 +134,11 @@ pub(crate) mod parser {
                 | Token::Const(_)
                 | Token::LParen => {
                     // O
-                    node.children.push(self.O());
+                    let xxx = self.O();
+                    self.graph.add_edge(node, xxx, "");
                     // E'
-                    node.children.push(self.Ep());
+                    let xxx = self.Ep();
+                    self.graph.add_edge(node, xxx, "");
                 }
                 tok => panic!("Unexpected token {:?}", tok)
             }
@@ -133,26 +146,28 @@ pub(crate) mod parser {
             return node;
         }
 
-        pub fn Ep(&mut self) -> Tree {
-            let mut node = Tree::get_leaf(self.gid(), "Ep".to_string());
+        pub fn Ep(&mut self) -> NodeIndex {
+            let node = Tree::get_leaf(&mut self.graph, "Ep".to_string());
 
             match self.lex.get_token() {
                 Token::Op(Or) => {
                     // or
                     self.lex.next_token();
-                    node.children.push(Tree::get_leaf(self.gid(), "or".to_string()));
+                    let xxx = Tree::get_leaf(&mut self.graph, "or".to_string());
+                    self.graph.add_edge(node, xxx, "");
                     // E
-                    node.children.push(self.E());
+                    let xxx = self.E();
+                    self.graph.add_edge(node, xxx, "");
                 }
-                Token::RParen | Token::End => {}
+                Token::RParen | Token::End => {self.add_eps_node(node)}
                 tok => panic!("Unexpected token {:?}", tok)
             }
 
             return node;
         }
 
-        pub fn O(&mut self) -> Tree {
-            let mut node = Tree::get_leaf(self.gid(), "O".to_string());
+        pub fn O(&mut self) -> NodeIndex {
+            let node = Tree::get_leaf(&mut self.graph, "O".to_string());
 
             match self.lex.get_token() {
                 Token::Variable(_)
@@ -162,9 +177,11 @@ pub(crate) mod parser {
                 | Token::Const(_)
                 | Token::LParen => {
                     // A
-                    node.children.push(self.A());
+                    let xxx = self.A();
+                    self.graph.add_edge(node, xxx, "");
                     // O'
-                    node.children.push(self.Op());
+                    let xxx = self.Op();
+                    self.graph.add_edge(node, xxx, "");
                 }
                 tok => panic!("Unexpected token {:?}", tok)
             }
@@ -172,36 +189,40 @@ pub(crate) mod parser {
             return node;
         }
 
-        pub fn Op(&mut self) -> Tree {
-            let mut node = Tree::get_leaf(self.gid(), "Op".to_string());
+        pub fn Op(&mut self) -> NodeIndex {
+            let node = Tree::get_leaf(&mut self.graph, "Op".to_string());
 
             match self.lex.get_token() {
                 Token::Op(And) => {
                     // and
                     self.lex.next_token();
-                    node.children.push(Tree::get_leaf(self.gid(), "and".to_string()));
+                    let xxx = Tree::get_leaf(&mut self.graph, "and".to_string());
+                    self.graph.add_edge(node, xxx, "");
                     // O
-                    node.children.push(self.O());
+                    let xxx = self.O();
+                    self.graph.add_edge(node, xxx, "");
                 }
                 Token::RParen
                 | Token::End
-                | Token::Op(Or) => {}
+                | Token::Op(Or) => {self.add_eps_node(node)}
                 tok => panic!("Unexpected token {:?}", tok)
             }
 
             return node;
         }
 
-        pub fn A(&mut self) -> Tree {
-            let mut node = Tree::get_leaf(self.gid(), "A".to_string());
+        pub fn A(&mut self) -> NodeIndex {
+            let node = Tree::get_leaf(&mut self.graph, "A".to_string());
 
             match self.lex.get_token() {
                 Token::Op(Not) => {
                     // not
                     self.lex.next_token();
-                    node.children.push(Tree::get_leaf(self.gid(), "not".to_string()));
+                    let xxx = Tree::get_leaf(&mut self.graph, "not".to_string());
+                    self.graph.add_edge(node, xxx, "");
                     // N
-                    node.children.push(self.N());
+                    let xxx = self.N();
+                    self.graph.add_edge(node, xxx, "");
                 }
                 Token::Variable(_)
                 | Token::Op(Add)
@@ -209,7 +230,8 @@ pub(crate) mod parser {
                 | Token::Const(_)
                 | Token::LParen => {
                     // N
-                    node.children.push(self.N());
+                    let xxx = self.N();
+                    self.graph.add_edge(node, xxx, "");
                 }
                 tok => panic!("Unexpected token {:?}", tok)
             }
@@ -217,8 +239,8 @@ pub(crate) mod parser {
             return node;
         }
 
-        pub fn N(&mut self) -> Tree {
-            let mut node = Tree::get_leaf(self.gid(), "N".to_string());
+        pub fn N(&mut self) -> NodeIndex {
+            let node = Tree::get_leaf(&mut self.graph, "N".to_string());
 
             match self.lex.get_token() {
                 Token::Variable(_)
@@ -227,9 +249,11 @@ pub(crate) mod parser {
                 | Token::Const(_)
                 | Token::LParen => {
                     // Q
-                    node.children.push(self.Q());
+                    let xxx = self.Q();
+                    self.graph.add_edge(node, xxx, "");
                     // N'
-                    node.children.push(self.Np());
+                    let xxx = self.Np();
+                    self.graph.add_edge(node, xxx, "");
                 }
                 tok => panic!("Unexpected token {:?}", tok)
             }
@@ -237,29 +261,31 @@ pub(crate) mod parser {
             return node;
         }
 
-        pub fn Np(&mut self) -> Tree {
-            let mut node = Tree::get_leaf(self.gid(), "Np".to_string());
+        pub fn Np(&mut self) -> NodeIndex {
+            let node = Tree::get_leaf(&mut self.graph, "Np".to_string());
 
             match self.lex.get_token() {
                 Token::Op(Eq) => {
                     // ==
                     self.lex.next_token();
-                    node.children.push(Tree::get_leaf(self.gid(), "==".to_string()));
+                    let xxx = Tree::get_leaf(&mut self.graph, "==".to_string());
+                    self.graph.add_edge(node, xxx, "");
                     // N
-                    node.children.push(self.N());
+                    let xxx = self.N();
+                    self.graph.add_edge(node, xxx, "");
                 }
                 Token::RParen
                 | Token::End
                 | Token::Op(Or)
-                | Token::Op(And) => {}
+                | Token::Op(And) => {self.add_eps_node(node)}
                 tok => panic!("Unexpected token {:?}", tok)
             }
 
             return node;
         }
 
-        pub fn Q(&mut self) -> Tree {
-            let mut node = Tree::get_leaf(self.gid(), "Q".to_string());
+        pub fn Q(&mut self) -> NodeIndex {
+            let node = Tree::get_leaf(&mut self.graph, "Q".to_string());
 
             match self.lex.get_token() {
                 Token::Variable(_)
@@ -268,9 +294,11 @@ pub(crate) mod parser {
                 | Token::Const(_)
                 | Token::LParen => {
                     // T
-                    node.children.push(self.T());
+                    let xxx = self.T();
+                    self.graph.add_edge(node, xxx, "");
                     // Q'
-                    node.children.push(self.Qp());
+                    let xxx = self.Qp();
+                    self.graph.add_edge(node, xxx, "");
                 }
                 tok => panic!("Unexpected token {:?}", tok)
             }
@@ -278,37 +306,41 @@ pub(crate) mod parser {
             return node;
         }
 
-        pub fn Qp(&mut self) -> Tree {
-            let mut node = Tree::get_leaf(self.gid(), "Qp".to_string());
+        pub fn Qp(&mut self) -> NodeIndex {
+            let node = Tree::get_leaf(&mut self.graph, "Qp".to_string());
 
             match self.lex.get_token() {
                 Token::Op(Add) => {
                     // +
                     self.lex.next_token();
-                    node.children.push(Tree::get_leaf(self.gid(), "+".to_string()));
+                    let xxx = Tree::get_leaf(&mut self.graph, "+".to_string());
+                    self.graph.add_edge(node, xxx, "");
                     // Q
-                    node.children.push(self.Q());
+                    let xxx = self.Q();
+                    self.graph.add_edge(node, xxx, "");
                 }
                 Token::Op(Sub) => {
                     // -
                     self.lex.next_token();
-                    node.children.push(Tree::get_leaf(self.gid(), "-".to_string()));
+                    let xxx = Tree::get_leaf(&mut self.graph, "-".to_string());
+                    self.graph.add_edge(node, xxx, "");
                     // Q
-                    node.children.push(self.Q());
+                    let xxx = self.Q();
+                    self.graph.add_edge(node, xxx, "");
                 }
                 Token::RParen
                 | Token::End
                 | Token::Op(Or)
                 | Token::Op(And)
-                | Token::Op(Eq)=> {}
+                | Token::Op(Eq) => {self.add_eps_node(node)}
                 tok => panic!("Unexpected token {:?}", tok)
             }
 
             return node;
         }
 
-        pub fn T(&mut self) -> Tree {
-            let mut node = Tree::get_leaf(self.gid(), "T".to_string());
+        pub fn T(&mut self) -> NodeIndex {
+            let node = Tree::get_leaf(&mut self.graph, "T".to_string());
 
             match self.lex.get_token() {
                 Token::Variable(_)
@@ -317,9 +349,11 @@ pub(crate) mod parser {
                 | Token::Const(_)
                 | Token::LParen => {
                     // F
-                    node.children.push(self.F());
+                    let xxx = self.F();
+                    self.graph.add_edge(node, xxx, "");
                     // T'
-                    node.children.push(self.Tp());
+                    let xxx = self.Tp();
+                    self.graph.add_edge(node, xxx, "");
                 }
                 tok => panic!("Unexpected token {:?}", tok)
             }
@@ -327,30 +361,36 @@ pub(crate) mod parser {
             return node;
         }
 
-        pub fn Tp(&mut self) -> Tree {
-            let mut node = Tree::get_leaf(self.gid(), "Tp".to_string());
+        pub fn Tp(&mut self) -> NodeIndex {
+            let node = Tree::get_leaf(&mut self.graph, "Tp".to_string());
 
             match self.lex.get_token() {
                 Token::Op(Mul) => {
                     // *
                     self.lex.next_token();
-                    node.children.push(Tree::get_leaf(self.gid(), "*".to_string()));
+                    let xxx = Tree::get_leaf(&mut self.graph, "*".to_string());
+                    self.graph.add_edge(node, xxx, "");
                     // T
-                    node.children.push(self.T());
+                    let xxx = self.T();
+                    self.graph.add_edge(node, xxx, "");
                 }
                 Token::Op(Div) => {
                     // //
                     self.lex.next_token();
-                    node.children.push(Tree::get_leaf(self.gid(), "//".to_string()));
+                    let xxx = Tree::get_leaf(&mut self.graph, "//".to_string());
+                    self.graph.add_edge(node, xxx, "");
                     // T
-                    node.children.push(self.T());
+                    let xxx = self.T();
+                    self.graph.add_edge(node, xxx, "");
                 }
                 Token::Op(Mod) => {
                     // %
                     self.lex.next_token();
-                    node.children.push(Tree::get_leaf(self.gid(), "%".to_string()));
+                    let xxx = Tree::get_leaf(&mut self.graph, "%".to_string());
+                    self.graph.add_edge(node, xxx, "");
                     // T
-                    node.children.push(self.T());
+                    let xxx = self.T();
+                    self.graph.add_edge(node, xxx, "");
                 }
                 Token::RParen
                 | Token::End
@@ -358,36 +398,41 @@ pub(crate) mod parser {
                 | Token::Op(And)
                 | Token::Op(Eq)
                 | Token::Op(Add)
-                | Token::Op(Sub)=> {}
+                | Token::Op(Sub) => {self.add_eps_node(node)}
                 tok => panic!("Unexpected token {:?}", tok)
             }
 
             return node;
         }
 
-        pub fn F(&mut self) -> Tree {
-            let mut node = Tree::get_leaf(self.gid(), "F".to_string());
+        pub fn F(&mut self) -> NodeIndex {
+            let node = Tree::get_leaf(&mut self.graph, "F".to_string());
 
             match self.lex.get_token() {
                 Token::Op(Add) => {
                     // +
                     self.lex.next_token();
-                    node.children.push(Tree::get_leaf(self.gid(), "+".to_string()));
+                    let xxx = Tree::get_leaf(&mut self.graph, "+".to_string());
+                    self.graph.add_edge(node, xxx, "");
                     // C
-                    node.children.push(self.C());
+                    let xxx = self.C();
+                    self.graph.add_edge(node, xxx, "");
                 }
                 Token::Op(Sub) => {
                     // -
                     self.lex.next_token();
-                    node.children.push(Tree::get_leaf(self.gid(), "-".to_string()));
+                    let xxx = Tree::get_leaf(&mut self.graph, "-".to_string());
+                    self.graph.add_edge(node, xxx, "");
                     // C
-                    node.children.push(self.C());
+                    let xxx = self.C();
+                    self.graph.add_edge(node, xxx, "");
                 }
                 Token::Variable(_)
                 | Token::Const(_)
                 | Token::LParen => {
                     // C
-                    node.children.push(self.C());
+                    let xxx = self.C();
+                    self.graph.add_edge(node, xxx, "");
                 }
                 tok => panic!("Unexpected token {:?}", tok)
             }
@@ -395,33 +440,39 @@ pub(crate) mod parser {
             return node;
         }
 
-        pub fn C(&mut self) -> Tree {
-            let mut node = Tree::get_leaf(self.gid(), "C".to_string());
+        pub fn C(&mut self) -> NodeIndex {
+            let node = Tree::get_leaf(&mut self.graph, "C".to_string());
 
             match self.lex.get_token() {
                 Token::Variable(str)
                 | Token::Const(Number(str)) => {
                     self.lex.next_token();
-                    node.children.push(Tree::get_leaf(self.gid(), str));
+                    let xxx = Tree::get_leaf(&mut self.graph, str);
+                    self.graph.add_edge(node, xxx, "");
                 }
                 Token::Const(True) => {
                     self.lex.next_token();
-                    node.children.push(Tree::get_leaf(self.gid(), "True".to_string()));
+                    let xxx = Tree::get_leaf(&mut self.graph, "True".to_string());
+                    self.graph.add_edge(node, xxx, "");
                 }
                 Token::Const(False) => {
                     self.lex.next_token();
-                    node.children.push(Tree::get_leaf(self.gid(), "False".to_string()));
+                    let xxx = Tree::get_leaf(&mut self.graph, "False".to_string());
+                    self.graph.add_edge(node, xxx, "");
                 }
                 Token::LParen => {
                     // (
                     self.lex.next_token();
-                    node.children.push(Tree::get_leaf(self.gid(), "(".to_string()));
+                    let xxx = Tree::get_leaf(&mut self.graph, "(".to_string());
+                    self.graph.add_edge(node, xxx, "");
                     // S'
-                    node.children.push(self.Sp());
+                    let xxx = self.Sp();
+                    self.graph.add_edge(node, xxx, "");
                     // )
                     assert_eq!(self.lex.get_token(), Token::RParen);
                     self.lex.next_token();
-                    node.children.push(Tree::get_leaf(self.gid(), ")".to_string()));
+                    let xxx = Tree::get_leaf(&mut self.graph, ")".to_string());
+                    self.graph.add_edge(node, xxx, "");
                 }
                 tok => panic!("Unexpected token {:?}", tok)
             }
